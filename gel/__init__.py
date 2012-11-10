@@ -16,26 +16,25 @@ This module must be tread safe, so, the timers must call queues to be executed
 in the main thread, ok?
 the MPAssyncQueue will be used by sockets and will only work with the main method
 """
-from threading import Timer
-import socketqueue
-import time
-import socket
-import Queue
-import traceback
-import random
-import threading
-from threading import Lock
-threading.stack_size(4194304)
-lock = Lock()
+import socketqueue as _socketqueue
+import time as _time
+import socket as _socket
+import Queue as _Queue
+import traceback as _traceback
+import random as _random
+import threading as _threading
+from threading import Lock as _Lock
+_threading.stack_size(4194304)
+_lock = _Lock()
 
-class Timer(object):
+class _Timer(object):
     def __init__(self, interval, function, args=()):
         self.interval = interval
         self.function = function
         self.args = args
         self.running = False
-        self.queue = Queue.Queue()
-        self.queue_continue = Queue.Queue()
+        self.queue = _Queue.Queue()
+        self.queue_continue = _Queue.Queue()
 
     def start(self):
         def timer(interval, function, args, queue, queue_cont):
@@ -44,7 +43,7 @@ class Timer(object):
                 try:
                     queue.get(timeout=interval)
                     break
-                except Queue.Empty:
+                except _Queue.Empty:
                     try:
                         function(*args)
                     except:
@@ -52,7 +51,7 @@ class Timer(object):
                     if not queue_cont.get():
                         break
             self.running = False
-        t = threading.Thread(target=timer, name='timer', args=(self.interval,
+        t = _threading.Thread(target=timer, name='timer', args=(self.interval,
                                                            self.function,
                                                            self.args,
                                                            self.queue,
@@ -66,19 +65,23 @@ class Timer(object):
             self.queue.put(1)
             self.queue_continue.put(0)
 
-
+__all__ = [
+        '_IN', 'IO_OUT', 'IO_PRI', 'IO_ERR', 'IO_HUP',
+        'timeout_add', 'timeout_add_seconds', 'io_add_watch',
+        'main', 'main_quit', 'idle_add', 'get_current_time',
+        'source_remove'
+        ]
 _socket_queue = None
 _queue = None
 _main = False
-main_thread = threading.current_thread()
+_main_thread = _threading.current_thread()
 _timeout_add_list = []
 
-this_is_android = True
-IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP = socketqueue.IN,\
-                                        socketqueue.OUT,\
-                                        socketqueue.PRI,\
-                                        socketqueue.ERR,\
-                                        socketqueue.HUP
+IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP = _socketqueue.IN,\
+                                        _socketqueue.OUT,\
+                                        _socketqueue.PRI,\
+                                        _socketqueue.ERR,\
+                                        _socketqueue.HUP
 
 _handlers = {}
 _handler_id = 0
@@ -131,7 +134,7 @@ def _timeout_add(miliseconds, callback, source=None, *args):
             t = _handlers[source]
             t.cont()
         except:
-            t = Timer(seconds, cb)
+            t = _Timer(seconds, cb)
             _handlers[source] = t
             t.start()
 
@@ -236,7 +239,7 @@ def get_current_time():
     Returns: the current time as the number of seconds and microseconds from
     the epoch.
     """
-    return time.time()
+    return _time.time()
 
 def io_add_watch(fd, condition, callback, *args):
     """
@@ -280,7 +283,7 @@ def io_add_watch(fd, condition, callback, *args):
     global _io_handlers
     global _io_handlers_fd
     if not _socket_queue:
-        _socket_queue = socketqueue.SocketQueue()
+        _socket_queue = _socketqueue.SocketQueue()
 
     if not _io_handlers.has_key(fd):
         _socket_queue.register(fd, condition)
@@ -296,12 +299,12 @@ def main():
     global _socket_queue
     global _io_handlers_fd
     if not _socket_queue:
-        _socket_queue = socketqueue.SocketQueue()
+        _socket_queue = _socketqueue.SocketQueue()
     global _queue
     global _timeout_add_list 
     _handlers = globals()['_handlers']
     if not _queue:
-        _queue = GobjectQueue()
+        _queue = _GobjectQueue()
 
     def on_queue_callback(queue):
         cb1, callback, source, args = _queue.get()
@@ -314,7 +317,7 @@ def main():
     #starting hanged timers
     for i in _timeout_add_list:
         seconds, cb, source = i
-        t = Timer(seconds, cb)
+        t = _Timer(seconds, cb)
         t.start()
         _handlers[source] = t
     _timeout_add_list = []
@@ -392,18 +395,18 @@ def main_quit():
 
 
 
-class GobjectQueue(Queue.Queue):
+class _GobjectQueue(_Queue.Queue):
 
 
     def __init__(self, *args):
         self.callback = []
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
         while 1:
             try:
                 """
                 @todo: use pipes instead sockets for every SO that's not windows.
                 """
-                self.port = random.randint(1025, 65534)
+                self.port = _random.randint(1025, 65534)
                 self.sock.bind(("127.0.0.1", self.port))
                 break
             except Exception, e:
@@ -411,14 +414,14 @@ class GobjectQueue(Queue.Queue):
                 print "o.O"
                 continue
         io_add_watch(self.sock, IO_IN, self._on_data)
-        Queue.Queue.__init__(self, *args)
+        _Queue.Queue.__init__(self, *args)
 
     def put(self, data):
-        Queue.Queue.put(self, data)
+        _Queue.Queue.put(self, data)
         self.sock.sendto("1", self.sock.getsockname())
 
     def get(self, *args, **kw):
-        r = Queue.Queue.get(self, timeout=0.1)
+        r = _Queue.Queue.get(self, timeout=0.1)
         return r
 
     def _on_data(self, *args):

@@ -7,6 +7,48 @@ how to use:
 
 ```python
 """
+example using gobject
+"""
+
+import socket
+import gobject
+from gtk import main
+import time
+my_socket = socket.socket()
+
+def on_socket_read(self, sock):
+	print "data received", sock.recv(1024)
+
+def idle_generator():
+	v = ['|','/','-','\']
+	n = 0
+	while True:
+		n = (n+1) % len(v)
+		yield v[i]
+
+idle_caret = idle_generator()
+
+def im_idle():
+	print '\r%s' % idle_caret.next()
+	return True
+
+def called_after_10_seconds():
+	print '\r', time.asctime()
+
+gobject.io_add_watch(my_socket, gobject.IO_IN, on_socket_read)
+gobject.idle_add(im_idle)
+gobject.timeout_add(10000, called_after_10_seconds)
+my_socket.connect(("someaddress",SOMEPORT))
+main()
+
+"""
+with gel, the only diference is that the main function is in gel.
+"""
+
+```
+
+```python
+"""
 example using file monitor
 """
 import gel

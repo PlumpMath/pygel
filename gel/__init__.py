@@ -47,7 +47,7 @@ class _Timer(object):
                     try:
                         function(*args)
                     except:
-                        print traceback.print_exc()
+                        print _traceback.print_exc()
                     if not queue_cont.get():
                         break
             self.running = False
@@ -240,7 +240,7 @@ def source_remove(tag):
 
     except Exception, e:
         print e, type (e), "<--- source remove"
-        print traceback.print_exc()
+        print _traceback.print_exc()
         return False
 
 
@@ -346,7 +346,7 @@ def main():
                         to_remove.append(i)
                 except Exception, e:
                     print e, type(e), "exception!"
-                    print traceback.print_exc()
+                    print _traceback.print_exc()
             for i in to_remove:
                 #removing from list idles that not returned True
                 del _idle_handlers[i]
@@ -362,12 +362,12 @@ def main():
                             source_remove(handler)
                     except Exception, e:
                         print e, type(e), "socket exception"
-                        print traceback.print_exc()
+                        print _traceback.print_exc()
                 except Exception, e:
                     print "*** error on processing event"
                     print "unregistering io"
                     print e, type(e)
-                    print traceback.print_exc()
+                    print _traceback.print_exc()
                     _socket_queue.unregister(fd)
 
 

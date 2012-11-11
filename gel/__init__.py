@@ -191,7 +191,17 @@ def idle_add(callback, *args):
     _handler_id += 1
     handler = _handler_id
     _idle_handlers[handler] = (callback, args)
-    return handler 
+    return handler
+
+def get_io_handlers_descriptor(fd):
+    """
+    returns the full list of source tag for a socket or other fd
+    if no io handler registered, returns None
+    """
+    try:
+        return _io_handlers_fd[fd]
+    except:
+        return None 
 
 def source_remove(tag):
     """

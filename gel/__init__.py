@@ -295,13 +295,16 @@ def io_add_watch(fd, condition, callback, *args):
     if not _socket_queue:
         _socket_queue = _socketqueue.SocketQueue()
 
-    if not _io_handlers.has_key(fd):
+    if not _io_handlers_fd.has_key(fd):
         _socket_queue.register(fd, condition)
         _handler_id += 1
         handler = _handler_id
         _io_handlers[handler] = (fd, (callback, args))
         _io_handlers_fd[fd] =  (handler, (callback, args))
+    else:
+        handler = _io_handlers_fd[fd][0]
 
+    return handler
 
 
 

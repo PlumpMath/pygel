@@ -68,8 +68,8 @@ class _Timer(object):
 __all__ = [
         '_IN', 'IO_OUT', 'IO_PRI', 'IO_ERR', 'IO_HUP',
         'timeout_add', 'timeout_add_seconds', 'io_add_watch',
-        'main', 'main_quit', 'idle_add', 'get_current_time',
-        'source_remove'
+        'main', 'main_iteration', 'main_quit', 'idle_add',
+        'get_current_time', 'source_remove'
         ]
 _socket_queue = None
 _queue = None
@@ -129,7 +129,7 @@ def _timeout_add(miliseconds, callback, source=None, *args):
         """
         _queue.put((cb1, callback, source, args))
 
-    if _main: 
+    if _main:
         try:
             t = _handlers[source]
             t.cont()
@@ -157,10 +157,10 @@ def timeout_add_seconds(interval, callback, *args):
 def timeout_add(interval, callback, *args):
     """
 
-    the gobject_fake.timeout_add() function (specified by callback) to be 
+    the gobject_fake.timeout_add() function (specified by callback) to be
     called at regular intervals (specified by interval). Adittional arguments
     to pass to callback canb e specified after callback.
- 
+
     The function is called repeatedly until it returns False, at which point
     the timeout is automatically destroyed and the function will not be
     called again. THe first call to the function will be at the end of the
@@ -201,13 +201,13 @@ def get_io_handlers_descriptor(fd):
     try:
         return _io_handlers_fd[fd]
     except:
-        return None 
+        return None
 
 def source_remove(tag):
     """
     mocks's gobject source_remove
 
-    The gobject_fake.source_remove() function removes the event source 
+    The gobject_fake.source_remove() function removes the event source
     specified by tag (as returned by the timeout_add() and io_add_watch())
 
     handler: an Integer ID
@@ -271,7 +271,7 @@ def io_add_watch(fd, condition, callback, *args):
 
     Additional arguments to pass to callback can be specified after
      callback. The idle priority may be specified as a keyword-value pair
-      with the keyword "priority". 
+      with the keyword "priority".
       The signature of the callback function is:
 
   def callback(source, cb_condition, ...)
@@ -295,14 +295,65 @@ def io_add_watch(fd, condition, callback, *args):
     if not _socket_queue:
         _socket_queue = _socketqueue.SocketQueue()
 
-    if not _io_handlers.has_key(fd):
+    if not _io_handlers_fd.has_key(fd):
         _socket_queue.register(fd, condition)
         _handler_id += 1
         handler = _handler_id
         _io_handlers[handler] = (fd, (callback, args))
         _io_handlers_fd[fd] =  (handler, (callback, args))
+    else:
+        handler = _io_handlers_fd[fd][0]
+
+    return handler
 
 
+def main_iteration(block=True):
+    """
+    block :
+        if True block if no events are pending
+
+    Returns :
+        True if the gtk.main_quit() function has been called for the innermost main loop.
+
+    The gtk.main_iteration() function runs a single iteration of the mainloop. If no events are waiting to be processed PyGTK will block until the next event is noticed if block is True. This function is identical to the gtk.main_iteration_do() function.
+    """
+    #TODO: The pool should return immediatly if main_quit() is called
+
+    f = _socket_queue.poll(timeout=-1 if block else 0)
+    if not f:
+        # running idle queue
+        global _idle_handlers
+        to_remove = []
+        for i in _idle_handlers:
+            try:
+                func, a = _idle_handlers[i]
+                if func(*a) != True:
+                    to_remove.append(i)
+            except Exception, e:
+                print e, type(e), "exception!"
+                print _traceback.print_exc()
+        for i in to_remove:
+            #removing from list idles that not returned True
+            del _idle_handlers[i]
+
+    else:
+        for fd, event_type in f:
+            #processing all events
+            try:
+                handler, func = _io_handlers_fd[fd]
+                func, args = func
+                try:
+                    if not func(fd, event_type, *args):
+                        source_remove(handler)
+                except Exception, e:
+                    print e, type(e), "socket exception"
+                    print _traceback.print_exc()
+            except Exception, e:
+                print "*** error on processing event"
+                print "unregistering io"
+                print e, type(e)
+                print _traceback.print_exc()
+                _socket_queue.unregister(fd)
 
 
 def main():
@@ -311,7 +362,7 @@ def main():
     if not _socket_queue:
         _socket_queue = _socketqueue.SocketQueue()
     global _queue
-    global _timeout_add_list 
+    global _timeout_add_list
     _handlers = globals()['_handlers']
     if not _queue:
         _queue = _GobjectQueue()
@@ -332,52 +383,13 @@ def main():
         _handlers[source] = t
     _timeout_add_list = []
 
-
-    def __main():
-        f = _socket_queue.poll(timeout=1)
-        if not f:
-            # running idle queue
-            global _idle_handlers
-            to_remove = []
-            for i in _idle_handlers:
-                try:
-                    func, a = _idle_handlers[i]
-                    if func(*a) != True:
-                        to_remove.append(i)
-                except Exception, e:
-                    print e, type(e), "exception!"
-                    print _traceback.print_exc()
-            for i in to_remove:
-                #removing from list idles that not returned True
-                del _idle_handlers[i]
-
-        else:
-            for fd, event_type in f:
-                #processing all events
-                try:
-                    handler, func = _io_handlers_fd[fd]
-                    func, args = func
-                    try:
-                        if not func(fd, event_type, *args):
-                            source_remove(handler)
-                    except Exception, e:
-                        print e, type(e), "socket exception"
-                        print _traceback.print_exc()
-                except Exception, e:
-                    print "*** error on processing event"
-                    print "unregistering io"
-                    print e, type(e)
-                    print _traceback.print_exc()
-                    _socket_queue.unregister(fd)
-
-
     while _main:
         try:
-            __main()
+            main_iteration()
         except KeyboardInterrupt:
             print "\rStopped by CTRL+C"
             _cancel_all_timers(1)
-            break 
+            break
     _cancel_all_timers()
 
 def _cancel_all_timers(command=0):

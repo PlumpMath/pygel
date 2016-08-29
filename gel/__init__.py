@@ -16,6 +16,19 @@ This module must be tread safe, so, the timers must call queues to be executed
 in the main thread, ok?
 the MPAssyncQueue will be used by sockets and will only work with the main method
 """
+
+from __future__ import print_function, division
+
+import logging
+FORMAT = "%(asctime)s:%(name)s:%(levelname)s: %(message)s"
+
+logger = logging.Logger(__name__, level=logging.DEBUG)
+
+logger.addHandler(logging.StreamHandler())
+formatter = logging.Formatter(fmt=FORMAT)
+map(lambda x: x.setFormatter(formatter), logger.handlers)
+
+
 import socketqueue as _socketqueue
 import time as _time
 import socket as _socket
@@ -58,8 +71,8 @@ class _Timer(object):
                 except _Queue.Empty:
                     try:
                         function(*args)
-                    except:
-                        print _traceback.print_exc()
+                    except Exception as e:
+                        logger.exception("error on timer %s", e)
                     if not queue_cont.get():
                         break
             self.running = False
@@ -203,12 +216,7 @@ def idle_add(callback, *args):
     *args: optitional arguments
     Returns: an Integer ID
     """
-    global _handler_id
-    global _idle_handlers
-    _handler_id += 1
-    handler = _handler_id
-    _idle_handlers[handler] = (callback, args)
-    return handler
+    return timeout_add(0, callback, *args)
 
 
 @_with_mutex
@@ -260,8 +268,7 @@ def source_remove(tag):
         return False
 
     except Exception, e:
-        print e, type(e), "<--- source remove"
-        print _traceback.print_exc()
+        logger.exception("Source Remove %s", e)
         return False
 
 
@@ -352,8 +359,7 @@ def main_iteration(block=True):
                 if func(*a) is not True:
                     to_remove.append(i)
             except Exception, e:
-                print e, type(e), "exception!"
-                print _traceback.print_exc()
+                logger.exception("Main Iteration: %s", e)
         for i in to_remove:
             # removing from list idles that not returned True
             del _idle_handlers[i]
@@ -368,14 +374,26 @@ def main_iteration(block=True):
                     if not func(fd, event_type, *args):
                         source_remove(handler)
                 except Exception, e:
-                    print e, type(e), "socket exception"
-                    print _traceback.print_exc()
+                    logger.exception("MainIteration SocketError", e)
             except Exception, e:
-                print "*** error on processing event"
-                print "unregistering io"
-                print e, type(e)
-                print _traceback.print_exc()
+                logger.exception("Error processing event")
+                logger.exception("unregistering io: %s", e)
                 _socket_queue.unregister(fd)
+
+
+
+def spawn_task(task, callback, *args, **kwargs):
+    import threading
+    import functools
+
+    @functools.wraps(task)
+    def threaded_task(*args, **kwargs):
+        ret = task(*args, **kwargs)
+        idle_add(callback, ret)
+
+    thread = threading.Thread(target=threaded_task, name="gel_task",
+                              args=args, kwargs=kwargs)
+    thread.start()
 
 
 def main():
@@ -409,7 +427,7 @@ def main():
         try:
             main_iteration()
         except KeyboardInterrupt:
-            print "\rStopped by CTRL+C"
+            logger.debug("Stopped by CTRL+C")
             _cancel_all_timers(1)
             break
     _cancel_all_timers()
@@ -431,13 +449,10 @@ def _cancel_all_timers(command=0):
             global _timeout_add_list
             _timeout_add_list.append((seconds, cb, source))
 
-
 def main_quit():
     global _main
-#    _cancel_all_timers()
+    _cancel_all_timers()
     _main = False
-    # for i in _get_all_timers():
-    #    i.join()
 
 
 class _GobjectQueue(_Queue.Queue):
@@ -454,8 +469,6 @@ class _GobjectQueue(_Queue.Queue):
                 self.sock.bind(("127.0.0.1", self.port))
                 break
             except Exception, e:
-                print e, type(e)
-                print "o.O"
                 continue
         self._source_handle = io_add_watch(self.sock, IO_IN, self._on_data)
         _Queue.Queue.__init__(self, *args)
@@ -481,8 +494,5 @@ class _GobjectQueue(_Queue.Queue):
             try:
                 i(self)
             except Exception as e:
-                print e
-                import traceback
-                traceback.print_exc()
-                pass
+                logger.exception("Error on data: %s", e)
         return True

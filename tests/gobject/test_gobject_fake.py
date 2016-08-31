@@ -3,8 +3,6 @@ import os
 import sys
 import unittest
 from functools import wraps
-sys.path.append("..")
-sys.path.append('.')
 import gel as gobject
 import time
 
@@ -38,9 +36,9 @@ def el_quit(f):
     return wrap
 
 
-class GobjectFakeTestCase(unittest.TestCase):
+class _GobjectFakeTestCase(unittest.TestCase):
 
-    def test_timer(self):
+    def _test_timer(self):
 
         @el_quit
         def timer_callback(current_time):

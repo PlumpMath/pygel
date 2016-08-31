@@ -1,1 +1,3 @@
 socketqueue
+ipython==1.2.1
+ipdb

@@ -8,12 +8,12 @@ import sys
 import logging
 import socketqueue
 import socket
-import Queue
 import threading
 import functools
 import enum
 import traceback
-import bidict
+
+Queue = six.moves.queue
 
 import socketqueue
 
@@ -64,7 +64,7 @@ class _GelQueue(Queue.Queue):
         if sys.platform == "win32":
             while True:
                 self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                self._port = self._ports.next()
+                self._port = six.next(self._ports)
                 try:
                     self._socket.bind(("127.0.0.1", self._port))
                 except socket.error:
@@ -105,7 +105,7 @@ class _GelQueue(Queue.Queue):
         if sys.platform == "win32":
             self._out_pipe.sendto("\x00", self._in_pipe.getsockname())
         else:
-            os.write(self._out_pipe, "\x00")
+            os.write(self._out_pipe, six.b("\x00"))
 
     def get(self, *args, **kwargs):
         return Queue.Queue.get(self, timeout=.1)
@@ -142,7 +142,7 @@ class Gel(object):
                 self._timers.remove(timer)
             self._idle_queue.put((cb, handler, args, kwargs))
 
-        handler = self._handler.next()
+        handler = six.next(self._handler)
         timer = threading.Timer(timeout, _timer_callback, kwargs=kwargs)
 
         timer.args = (timer, cb, handler) + args
@@ -160,7 +160,7 @@ class Gel(object):
 
     def register_io(self, fd, callback, mode=IO_IN, *args, **kwargs):
         with self._mutex:
-            handler = self._handler.next()
+            handler = six.next(self._handler)
             self._socket_queue.register(fd, mode)
             self._io_handlers.setdefault(fd, set())
             self._io_handlers[fd].add(handler)

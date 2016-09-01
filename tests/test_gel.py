@@ -2,6 +2,7 @@
 
 from gel import gel
 
+import six
 import sys
 import unittest
 import time
@@ -102,7 +103,7 @@ class GelTestCase(unittest.TestCase):
             while True:
                 s = socket.socket()
                 try:
-                    s.bind(("127.0.0.1", port_generator.next()))
+                    s.bind(("127.0.0.1", six.next(port_generator)))
                 except socket.error:
                     continue
                 s.listen(1)

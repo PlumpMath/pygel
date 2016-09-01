@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+
+import six
 import os
 import sys
 import unittest
@@ -51,7 +53,7 @@ class GobjectFakeTestCase(unittest.TestCase):
 
     @gel_main
     def test_timer_is_thread_safe(self):
-        import thread
+        thread = six.moves._thread
         tid = thread.get_ident()
 
         @gel_quit

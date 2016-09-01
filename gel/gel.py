@@ -13,6 +13,7 @@ import threading
 import functools
 import enum
 import traceback
+import bidict
 
 import socketqueue
 
@@ -60,7 +61,7 @@ class _GelQueue(Queue.Queue):
                 start_port = 1025
 
     def _init_pipe(self):
-        if sys.platform == "win32" or True:
+        if sys.platform == "win32":
             while True:
                 self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 self._port = self._ports.next()
@@ -83,7 +84,7 @@ class _GelQueue(Queue.Queue):
         Queue.Queue.__init__(self).__init__()
 
     def _close(self):
-        if sys.platform == "win32" or True:
+        if sys.platform == "win32":
             self._in_pipe.close()
             del self._in_pipe
         else:
@@ -92,18 +93,16 @@ class _GelQueue(Queue.Queue):
         self.reactor.remove_watch(self._watch_handler)
 
     def _on_data(self, *args):
-        if sys.platform == "win32" or True:
+        if sys.platform == "win32":
             _, a = self._in_pipe.recvfrom(1)
             if a != self._in_pipe.getsockname():
                 return
         else:
             os.read(self._in_pipe, 1)
 
-        return cb, args, kwargs
-
     def put(self, data):
         Queue.Queue.put(self, data)
-        if sys.platform == "win32" or True:
+        if sys.platform == "win32":
             self._out_pipe.sendto("\x00", self._in_pipe.getsockname())
         else:
             os.write(self._out_pipe, "\x00")
@@ -126,6 +125,7 @@ class Gel(object):
         self._timers = set()
         self._io_cb = {}
         self._io_handlers = {}
+        self._io_fd = {}
         self._timer_handlers = {}
         self._idle_queue = _GelQueue(self)
         self._quit_queue = _GelQueue(self)
@@ -155,26 +155,25 @@ class Gel(object):
     def fd_number(self, fd):
         if type(fd) is int:
             return fd
-        if type(fd) in (file, socket):
+        if type(fd) in (file, socket.socket):
             return fd.fileno()
 
-    def register_io(self, fd, callback, mode=IO_IN):
+    def register_io(self, fd, callback, mode=IO_IN, *args, **kwargs):
         with self._mutex:
             handler = self._handler.next()
-            fd_num = self.fd_number(fd)
             self._socket_queue.register(fd, mode)
-            self._io_handlers.setdefault(fd_num, set())
-            self._io_handlers[fd_num].add(handler)
-            self._io_cb.setdefault(handler, set())
-            self._io_cb[handler].add(callback)
+            self._io_handlers.setdefault(fd, set())
+            self._io_handlers[fd].add(handler)
+            self._io_fd[handler] = fd
+            self._io_cb[handler] = (callback, args, kwargs)
+
 
     def unregister(self, handler):
         with self._mutex:
-            fd = self._io_handlers.get(handler)
+            fd = self._io_fd.get(handler)
             if fd is not None:
-                self._socket_queue.unregister(fd)
                 del self._io_cb[handler]
-                del self._io_handlers[fd]
+                self._io_handlers[fd].remove(handler)
 
     def idle_call(self, cb, *args, **kwargs):
         self._idle_queue.put((cb, None, args, kwargs))
@@ -192,10 +191,11 @@ class Gel(object):
         return self._timer(timeout, cb, *args, **kwargs)
 
     def main_iteration(self, block=True):
-        event = self._socket_queue.poll(timeout=-1 if block else 0)
+        event = self._socket_queue.poll(timeout=-1 if block else 0)[0][0]
 
         if event is self._quit_queue.pipe:
             self._quit_queue._on_data()
+            self._quit_queue.get()
             return False
 
         elif event is self._idle_queue.pipe:
@@ -211,30 +211,33 @@ class Gel(object):
         self._cancel_all_timers()
 
     def main_quit(self):
-        self._quit_queue.put((cb))
+        self._quit_queue.put(None)
 
     def _handle_io_event(self, event):
         cbs = []
         handlers_to_remove = []
         with self._mutex:
-            for handler in self._handers_by_fd(event):
+            for handler in self._handlers_by_fd(event):
                 cbs.append((handler, self._io_cb[handler]))
 
         for handler, cb in cbs:
+            cb, args, kwargs = cb
             try:
-                if not cb(): # if callback return False it should be unregistered
+                if not cb(event, *args, **kwargs): # if callback return False it should be unregistered
                     handlers_to_remove.append(handler)
             except Exception as e:
                 handlers_to_remove.append(handler)
                 logger.exception("%s", e)
                 logger.exception("%s", traceback.format_exc())
 
-        with self._mutex:
-            map(self.unregister, handlers_to_remove)
+        map(self.unregister, handlers_to_remove)
 
     def _handler_queue_event(self):
         # runs the idle callback on the queue or timer callback
-        cb, handler, args, kwargs = self._idle_queue._on_data()
+        self._idle_queue._on_data()
+        data = self._idle_queue.get()
+        cb, handler, args, kwargs = data
+
         with self._mutex:
             if handler is None:
                 evt_type = self.EvtType.OTHER
@@ -252,15 +255,15 @@ class Gel(object):
         else:
             self._safe_callback(cb, *args, **kwargs)
 
-    def _handers_by_fd(self, fd):
-
-        import ipdb; ipdb.set_trace()
+    def _handlers_by_fd(self, fd):
         for handler in self._io_handlers[fd]:
-            yield handler
+                yield handler
 
     def _safe_callback(self, cb, *args, **kwargs):
         try:
             return cb(*args, **kwargs)
+        except AssertionError as e:
+            raise(e)
         except Exception as e:
             logger.exception("%s", e)
             logger.exception("%s", traceback.format_exc())

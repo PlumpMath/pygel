@@ -10,52 +10,51 @@ import time
 class TimeoutError(IOError):
     pass
 
-
-def el_main(f):
+def gel_main(f):
     @wraps(f)
-    def wrap(*args, **kw):
-        r = f(*args, **kw)
+    def decorated(*args, **kwargs):
 
         def timeout_error():
             gobject.main_quit()
-            raise TimeoutError('callback took too long to execute')
-        gobject.timeout_add_seconds(200, timeout_error)
+            raise TimeoutError("callback took to long to execute")
+
+        gobject.timeout_add_seconds(2, timeout_error)
+        r = f(*args, **kwargs)
         gobject.main()
-        return r
-
-    return wrap
+    return decorated
 
 
-def el_quit(f):
-
+def gel_quit(f):
     @wraps(f)
-    def wrap(*args, **kw):
-        r = f(*args, **kw)
-        gobject.timeout_add(0, gobject.main_quit)
+    def decorated(*args, **kwargs):
+        r = f(*args, **kwargs)
+        gobject.main_quit()
         return r
-    return wrap
+
+    return decorated
 
 
-class _GobjectFakeTestCase(unittest.TestCase):
 
-    def _test_timer(self):
+class GobjectFakeTestCase(unittest.TestCase):
 
-        @el_quit
+    def test_timer(self):
+
+        @gel_quit
         def timer_callback(current_time):
             pass
             # self.assertAlmostEqual(int(time.time() - .01), int(current_time))
 
-        @el_main
+        @gel_main
         def actual_test():
             gobject.timeout_add_seconds(0.01, timer_callback, time.time())
         actual_test()
 
-    @el_main
-    def _est_timer_is_thread_safe(self):
+    @gel_main
+    def test_timer_is_thread_safe(self):
         import thread
         tid = thread.get_ident()
 
-        @el_quit
+        @gel_quit
         def timeout_callback():
             self.assertEqual(tid, thread.get_ident())
 
@@ -64,19 +63,18 @@ class _GobjectFakeTestCase(unittest.TestCase):
 
         gobject.idle_add(idle_callback)
 
-    def _est_idle(self):
-        self.called = []
-        import threading
-        import thread
-        self.tid = thread.get_ident()
+    def test_idle(self):
 
-        def idle_callback_0(called):
-            self.called = True
-            gobject.main_quit()
+        A = 1
 
-        gobject.idle_add(idle_callback_0)
-        gobject.main()
-        self.assertTrue(called)
+        @gel_quit
+        def idle(a):
+            self.assertTrue(a, A)
+            self.assertFalse(True)
+
+        @gel_main
+        def actual_test():
+            gobject.idle_add(callback)
 
     def _est_io_add_watch(self):
         can_out = [False, False]
@@ -119,33 +117,19 @@ class _GobjectFakeTestCase(unittest.TestCase):
         gobject.main()
         self.assertTrue(all(can_out))
 
-    @el_main
-    def _est_source_remove(self):
+    @gel_main
+    def test_source_remove(self):
         def timeout_callback():
             pass
 
         source = gobject.timeout_add_seconds(0.01, timeout_callback)
 
-        @el_quit
+        @gel_quit
         def idle_callback_1():
-            self.assertIn(source, gobject._handlers.keys())
             gobject.source_remove(source)
-            self.assertNotIn(source, gobject._handlers.keys())
 
         gobject.idle_add(idle_callback_1)
 
-    def _est_get_current_time(self):
+    def test_get_current_time(self):
         self.assertAlmostEqual(int(time.time()), int(gobject.get_current_time()), places=2)
 
-    @el_main
-    def _est_spawn_task(self):
-        def task(self):
-            # this task is running in background
-            time.sleep(1)
-            return 42
-
-        @el_quit
-        def callback(response):
-            self.assertEqual(response, 42)
-
-        gobject.spawn_task(task, callback)

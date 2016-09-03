@@ -1,11 +1,3 @@
-
-'''
-    Low level inotify wrapper
-    @Author Louis Riviere
-    @Modified by Marcelo Aires Caetano]
-    @Date 2012 may 6
-'''
-
 from __future__ import print_function, absolute_import, division
 
 import os
@@ -124,9 +116,12 @@ IN_ONESHOT = 0x80000000     # unregister automatically the watch after the first
                             # event
 
 
-libc = ctypes.cdll.LoadLibrary('libc.so.6')
+libc = ctypes.cdll.LoadLibrary('')
 
 def geterr(): return libc.__errno_location()
+
+last_error = libc.strerror
+last_error.restype = ctypes.c_char_p
 
 class Inotify(object):
 
@@ -134,7 +129,7 @@ class Inotify(object):
         self.libc = libc
         self.fd = libc.inotify_init()
         if self.fd == -1:
-            raise OSError(geterr())
+            raise OSError(last_error())
 
     def fileno(self):
         return self.fd
@@ -155,10 +150,9 @@ class Inotify(object):
         deb = 0
         while deb < size:
             fin = deb+16
-            wd, mask, cookie, name_len = struct.unpack('iIII', data[deb:fin])
+            wd, mask, cookie, name_len = struct.unpack(b'iIII', data[deb:fin])
             deb, fin = fin, fin+name_len
-            name = struct.unpack('%ds' % name_len, data[deb:fin])
-            name = name[0].rstrip('\0')
+            name = struct.unpack(b'%ds' % name_len, data[deb:fin])[0].rstrip(b'\0').decode('utf-8')
             deb = fin
             yield wd, mask, cookie, name
 
@@ -168,16 +162,16 @@ class Inotify(object):
         path may be relative,
         and the mask is one of the constants starting with IN
         """
-        path = os.path.abspath(path)
+        path = six.binary_type(os.path.abspath(path), "utf-8")
         wd = self.libc.inotify_add_watch(self.fd, path, mask)
         if wd == -1:
-            logger.warning("ADD error: %s", geterr())
+            logger.warning("ADD error: %s", last_error())
         return wd
 
     def rm_watch(self, wd):
         ret = self.libc.inotify_rm_watch(self.fd, wd)
         if ret == -1:
-            logger.warning("remove error %s", geterr())
+            logger.warning("remove error %s", last_error())
 
     def close(self):
         os.close(self.fd)

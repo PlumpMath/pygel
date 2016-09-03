@@ -3,6 +3,7 @@ from __future__ import print_function, division, absolute_import
 
 import sys
 import os
+
 assert 'linux' in sys.platform
 
 
@@ -135,21 +136,21 @@ class FileError(Exception):
 class FileWatchError(Exception):
     pass
 
-import gel
+from gel import Gel, IO_IN, IO_OUT
 import types
 
 class FileWatch(object):
 
-    def __init__(self, gobject=gel):
-        self.gobject = gel
+    def __init__(self, reactor=None):
+        self.reactor = reactor
+        if reactor is None:
+            self.reactor = Gel()
         self._notify = Inotify()
         self.watching = {}
         self.watching_wd = {}
         self.watching_file = {}
-        self.watching_dir = {}
-        monitor = self.gobject.IO_IN | self.gobject.IO_OUT
-        self.gobject.io_add_watch(self._notify, monitor,
-                                  self._callback)
+        monitor = IO_IN | IO_OUT
+        self.reactor.register_io(self._notify, self._callback, monitor)
 
     def _callback(self, *args):
         for i in self._notify.read():
@@ -175,7 +176,7 @@ class FileWatch(object):
 
     def watch_file(self, path, callback, mask=IN_MODIFY | IN_DELETE_SELF |
                                     IN_MOVE_SELF | IN_MASK_ADD | IN_ATTRIB):
-        if not type(callback) in (types.FunctionType, types.MethodType):
+        if not callable(callback):
             raise TypeError("callback must be a function.")
 
         if not os.path.exists(path):
@@ -189,15 +190,14 @@ class FileWatch(object):
         self.watching[path] = wd
         self.watching_wd[wd] = callback
         self.watching_file[wd] = (path, mask)
-        self.watching_dir[wd] = (path, mask)
 
     def watch_directory(self, path, callback, mask=IN_CREATE | IN_DELETE |
                                     IN_WRITE |IN_MOVED_FROM |
                                     IN_MOVED_TO | IN_MOVE_SELF):
         if not os.path.isdir(path):
-            raise FileError(("the path '%s' doesn't exists"\
+            raise FileError(("the path '%s' doesn't exists"
                              " or is not a directory") % path)
-        if not type(callback) in (types.FunctionType, types.MethodType):
+        if not callable(callback):
             raise TypeError("callback must be a function.")
 
         if path in self.watching:

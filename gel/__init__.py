@@ -7,9 +7,9 @@ import time
 __all__ = ['_IN', 'IO_OUT', 'IO_PRI', 'IO_ERR', 'IO_HUP',
            'timeout_add', 'timeout_add_seconds', 'io_add_watch',
            'main', 'main_iteration', 'main_quit', 'idle_add',
-           'get_current_time', 'source_remove']
+           'get_current_time', 'source_remove', 'Gel']
 
-from . import gel
+from .gel import Gel
 
 IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP = (gel.IO_IN,
                                          gel.IO_OUT,
@@ -18,7 +18,7 @@ IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP = (gel.IO_IN,
                                          gel.IO_HUP)
 
 
-_global_reactor = gel.Gel()
+_global_reactor = Gel()
 
 
 def timeout_add_seconds(interval, callback, *args):

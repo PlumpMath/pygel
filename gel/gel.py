@@ -10,7 +10,6 @@ import socketqueue
 import socket
 import threading
 import functools
-import enum
 import traceback
 
 Queue = six.moves.queue
@@ -39,7 +38,7 @@ IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP = (socketqueue.IN,
                                          socketqueue.HUP)
 
 
-class GelEvent():
+class GelEvent(object):
     # TODO: it should use enum?
     Accept = True
     Repeat = True
@@ -105,7 +104,7 @@ class _GelQueue(Queue.Queue):
         if sys.platform == "win32":
             self._out_pipe.sendto("\x00", self._in_pipe.getsockname())
         else:
-            os.write(self._out_pipe, six.b("\x00"))
+            os.write(self._out_pipe, b"\x00")
 
     def get(self, *args, **kwargs):
         return Queue.Queue.get(self, timeout=.1)
@@ -138,8 +137,12 @@ class Gel(object):
 
     def _timer(self, timeout, cb, *args, **kwargs):
         def _timer_callback(timer, cb, handler, *args,  **kwargs):
+            if hasattr(timer, "cancelled"):
+                return
             with self._mutex:
-                self._timers.remove(timer)
+                if timer not in self._timers:
+                    pass
+                else: self._timers.remove(timer)
             self._idle_queue.put((cb, handler, args, kwargs))
 
         handler = six.next(self._handler)
@@ -272,14 +275,7 @@ class Gel(object):
 
     def _cancel_all_timers(self):
         with self._mutex:
-            map(lambda timer: timer.cancel(), self._timers)
+            for timer in self._timers:
+                timer.cancelled = True
+                timer.cancel()
             self._timers.clear()
-
-
-
-
-
-
-
-
-

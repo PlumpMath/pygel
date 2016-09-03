@@ -43,8 +43,7 @@ class GobjectFakeTestCase(unittest.TestCase):
 
         @gel_quit
         def timer_callback(current_time):
-            pass
-            # self.assertAlmostEqual(int(time.time() - .01), int(current_time))
+            self.assertAlmostEqual(int(time.time() - .01), int(current_time))
 
         @gel_main
         def actual_test():

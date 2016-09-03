@@ -1,45 +1,51 @@
 # -*- coding: utf-8 -*-
+
 import os
 import sys
 import unittest
-sys.path.append("..")
-sys.path.append('.')
+
+import functools
 from gel.event_lib import inotify
 import shutil
 from gel.event_lib import file_monitor_linux
 
-import gel as gobject
+from gel import Gel
 
 
 directory = 'file_monitor_testing'
 
 
-class TimeoutError(IOError):
+class TimeoutError(AssertionError):
     pass
 
 
-def el_main(f):
-    def wrap(*args, **kw):
-        r = f(*args, **kw)
+def gel_main(reactor):
+    def decorator(f):
+        @functools.wraps(f)
+        def decorated(*args, **kwargs):
 
-        def timeout_error():
-            raise TimeoutError('callback took too long to execute')
-        gobject.timeout_add(50, timeout_error)
-        gobject.main()
-        return r
-    wrap.__name__ = f.__name__
-    wrap.__doc__ = f.__doc__
-    return wrap
+            def timeout_error():
+                reactor.main_quit()
+                # raise TimeoutError("callback took to long to execute")
+
+            reactor.timeout_seconds_call(2, timeout_error)
+            r = f(*args, **kwargs)
+            reactor.main()
+        return decorated
+    return decorator
 
 
-def el_quit(f):
-    def wrap(*args, **kw):
-        r = f(*args, **kw)
-        gobject.main_quit()
-        return r
-    wrap.__name__ = f.__name__
-    wrap.__doc__ = f.__doc__
-    return wrap
+def gel_quit(reactor):
+    def decorator(f):
+        @functools.wraps(f)
+        def decorated(*args, **kwargs):
+            r = f(*args, **kwargs)
+            reactor.main_quit()
+            return r
+
+        return decorated
+    return decorator
+
 
 
 class EventLibFileMonitorLinuxTestCase(unittest.TestCase):
@@ -50,41 +56,49 @@ class EventLibFileMonitorLinuxTestCase(unittest.TestCase):
         except:
             pass
         os.mkdir(directory)
-        self.file_watch = file_monitor_linux.FileWatch(gobject)
+        self.reactor = Gel()
+        self.file_watch = file_monitor_linux.FileWatch(self.reactor)
 
     def tearDown(self):
         shutil.rmtree(directory)
         del self.file_watch
 
-    @el_main
     def test_file_watcher(self):
         path = '%s/file_test' % directory
-        with open(path, "w") as w:
-            w.write("hi")
 
-        @el_quit
+        @gel_quit(self.reactor)
         def callback(apath):
             self.assertEqual(apath, path)
 
-        self.file_watch.watch_file(path, callback)
-        with open(path, 'a') as w:
-            w.write('olá')
+        @gel_main(self.reactor)
+        def actual_test():
+            with open(path, "w") as w:
+                w.write("hi")
+
+            self.file_watch.watch_file(path, callback)
+            with open(path, 'a') as w:
+                w.write('olá')
+
+        actual_test()
 
     def test_create_file_watcher_directory(self):
         def callback(path):
             return
         self.file_watch.watch_directory(directory, callback)
-        self.assertEqual(self.file_watch.watching.keys()[0], directory)
+        self.assertEqual(list(self.file_watch.watching.keys())[0], directory)
         self.assertEqual(self.file_watch.watching_wd[self.file_watch.watching[directory]], callback)
 
-    @el_main
     def test_directory_watcher(self):
 
-        @el_quit
+        @gel_quit(self.reactor)
         def callback(apath):
             self.assertEqual(apath, directory)
 
-        self.file_watch.watch_directory(directory, callback)
+        @gel_main(self.reactor)
+        def actual_test():
+            self.file_watch.watch_directory(directory, callback)
 
-        with open('%s/file_%d' % (directory, 0), 'w') as w:
-            w.write('oi%d' % 0)
+            with open('%s/file_%d' % (directory, 0), 'w') as w:
+                w.write('oi%d' % 0)
+
+        actual_test()

@@ -11,5 +11,5 @@ setup(name='pygel',
       description='An implementation of some functionalities of gobject/glib/gio in pure python, but adding a lot of new features.',
       long_description=open('README.txt').read(),
       packages=find_packages(),
-      install_requires=['socketqueue>=0.1.5'],
+      install_requires=['socketqueue>=0.1.8', 'six>=1.10.0'],
       url='http://github.com/caetanus/pygel')

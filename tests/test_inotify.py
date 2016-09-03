@@ -1,8 +1,7 @@
 import os
 import sys
 import unittest
-sys.path.append("..")
-sys.path.append('.')
+
 from gel.event_lib import inotify
 import socketqueue
 import shutil
@@ -23,11 +22,11 @@ class EventLibInotifyTestCase(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree('inotify_testing')
 
-    def inotify_start_test_case(self):
+    def test_inotify_start(self):
         i = inotify.Inotify()
         self.assertGreater(i.fileno(), 0)
 
-    def inotify_test_watch_directory_create_file(self):
+    def test_inotify_watch_directory_create_file(self):
         i = inotify.Inotify()
         masks = IN_CREATE
         i.add_watch("inotify_testing", masks)
@@ -36,7 +35,7 @@ class EventLibInotifyTestCase(unittest.TestCase):
         result = [j for j in i.read()]
         self.assertTrue(result)
 
-    def inotify_test_watch_directory_delete_file(self):
+    def test_inotify_watch_directory_delete_file(self):
         i = inotify.Inotify()
         masks = IN_DELETE
         with open("inotify_testing/file", "w") as w:
@@ -47,7 +46,7 @@ class EventLibInotifyTestCase(unittest.TestCase):
         result = [j for j in i.read()]
         self.assertTrue(result)
 
-    def inotify_test_watch_directory_move_file(self):
+    def test_inotify_watch_directory_move_file(self):
         i = inotify.Inotify()
         masks = IN_MOVED_FROM | IN_MOVED_TO
         with open("inotify_testing/file", "w") as w:
@@ -58,7 +57,7 @@ class EventLibInotifyTestCase(unittest.TestCase):
         result = [j for j in i.read()]
         self.assertTrue(result)
 
-    def inotify_test_modify_file(self):
+    def test_inotify_modify_file(self):
         i = inotify.Inotify()
         masks = inotify.IN_MODIFY
 

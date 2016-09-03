@@ -112,6 +112,10 @@ class _GelQueue(Queue.Queue):
 
 class Gel(object):
 
+    IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP = (IO_IN, IO_OUT,
+                                             IO_PRI, IO_ERR, 
+                                             IO_HUP)
+
     class EvtType(object):
         TIMER = 0
         IO = 1

@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(name='pygel',
-      version='0.5.0',
+      version='0.5.1',
       author='Marcelo Aires Caetano',
       author_email='marcelo@fiveti.com',
       license='BSD',

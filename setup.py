@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(name='pygel',
-      version='0.3.0',
+      version='0.5.0',
       author='Marcelo Aires Caetano',
       author_email='marcelo@fiveti.com',
       license='BSD',
@@ -11,5 +11,5 @@ setup(name='pygel',
       description='An implementation of some functionalities of gobject/glib/gio in pure python, but adding a lot of new features.',
       long_description=open('README.txt').read(),
       packages=find_packages(),
-      install_requires=['socketqueue>=0.1.8', 'six>=1.10.0'],
+      install_requires=['socketqueue>=0.1.9', 'six>=1.10.0'],
       url='http://github.com/caetanus/pygel')

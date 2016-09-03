@@ -159,14 +159,11 @@ class FileWatch(object):
                 #TODO ADD a way to return the file modified, created or etc if the observing is a directory
                 path, mask = self.watching_file[wd]
                 cb = self.watching_wd[wd]
-                #import ipdb;ipdb.set_trace()
-                #self.watch_file(path, cb, mask)
                 cb(path)
                 return True
 
             except Exception as e:
                 #raise
-                #print 'n', e, type(e)
                 pass
             try:
                 self.watching_wd[wd](wd)

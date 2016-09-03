@@ -123,6 +123,17 @@ def geterr(): return libc.__errno_location()
 last_error = libc.strerror
 last_error.restype = ctypes.c_char_p
 
+
+
+def binary_type(string):
+    if six.PY2:
+        return string
+    else:
+        # TODO: is some downcases nowadays?
+        # assumes linux is always using utf-8
+        return bytes(string, "utf-8")
+
+
 class Inotify(object):
 
     def __init__(self):
@@ -162,7 +173,7 @@ class Inotify(object):
         path may be relative,
         and the mask is one of the constants starting with IN
         """
-        path = six.binary_type(os.path.abspath(path), "utf-8")
+        path = binary_type(os.path.abspath(path))
         wd = self.libc.inotify_add_watch(self.fd, path, mask)
         if wd == -1:
             logger.warning("ADD error: %s", last_error())

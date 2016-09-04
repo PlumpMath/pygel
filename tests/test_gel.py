@@ -120,3 +120,7 @@ class GelTestCase(unittest.TestCase):
             client.connect(s.getsockname())
 
         actual_test()
+
+
+    def test_main_iteration_with_block_false_should_return_True_with_no_events(self):
+        self.assertTrue(self.reactor.main_iteration(block=False))

@@ -113,7 +113,7 @@ class _GelQueue(Queue.Queue):
 class Gel(object):
 
     IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP = (IO_IN, IO_OUT,
-                                             IO_PRI, IO_ERR, 
+                                             IO_PRI, IO_ERR,
                                              IO_HUP)
 
     class EvtType(object):
@@ -198,7 +198,11 @@ class Gel(object):
         return self._timer(timeout, cb, *args, **kwargs)
 
     def main_iteration(self, block=True):
-        event = self._socket_queue.poll(timeout=-1 if block else 0)[0][0]
+        try:
+            event = self._socket_queue.poll(timeout=-1 if block else 0)[0][0]
+        except IndexError:
+            # this exception will be caugth when using block=False
+            return True
 
         if event is self._quit_queue.pipe:
             self._quit_queue._on_data()

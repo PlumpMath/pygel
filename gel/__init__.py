@@ -2,20 +2,30 @@
 
 from __future__ import print_function, division, absolute_import
 
-import time
+import logging
 
-__all__ = ['_IN', 'IO_OUT', 'IO_PRI', 'IO_ERR', 'IO_HUP',
+import os
+
+try:
+    import vext
+    vext.logger.disabled = True
+    vext.logger.setLevel(logging.CRITICAL)
+    logging.getLogger('vext').setLevel(logging.CRITICAL)
+except ImportError:
+    pass
+
+if not os.getenv("GEL_DEBUG"):
+    logging.disable(logging.DEBUG)
+
+import time
+from .constants import (IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP)
+
+__all__ = ['IO_IN', 'IO_OUT', 'IO_PRI', 'IO_ERR', 'IO_HUP',
            'timeout_add', 'timeout_add_seconds', 'io_add_watch',
            'main', 'main_iteration', 'main_quit', 'idle_add',
            'get_current_time', 'source_remove', 'Gel']
 
 from .gel import Gel
-
-IO_IN, IO_OUT, IO_PRI, IO_ERR, IO_HUP = (gel.IO_IN,
-                                         gel.IO_OUT,
-                                         gel.IO_PRI,
-                                         gel.IO_ERR,
-                                         gel.IO_HUP)
 
 
 _global_reactor = Gel()
@@ -62,7 +72,6 @@ def idle_add(callback, *args):
     Returns: an Integer ID
     """
     return _global_reactor.idle_call(callback, *args)
-
 
 
 def source_remove(tag):
@@ -138,9 +147,9 @@ def main_iteration(block=True):
     _global_reactor.main_iteration(block=block)
 
 
-
 def main():
     _global_reactor.main()
+
 
 def main_quit():
     _global_reactor.main_quit()

@@ -10,6 +10,7 @@ import time
 import functools
 
 
+
 class TimeoutError(AssertionError):
     pass
 
@@ -23,6 +24,9 @@ def port_generator_helper():
             i = 1024
 
 
+GEL_TIMEOUT = 2.0 # Seconds
+
+
 def gel_main(reactor):
     def decorator(f):
         @functools.wraps(f)
@@ -32,11 +36,12 @@ def gel_main(reactor):
                 reactor.main_quit()
                 raise TimeoutError("callback took to long to execute")
 
-            reactor.timeout_seconds_call(2, timeout_error)
+            reactor.timeout_seconds_call(GEL_TIMEOUT, timeout_error)
             reactor.idle_call(f, *args, **kwargs)
             reactor.main()
         return decorated
     return decorator
+
 
 def gel_quit(reactor):
     def decorator(f):
@@ -128,8 +133,9 @@ class GelTestCase(unittest.TestCase):
         self.reactor.sleep(200)
         current = time.time()
         # assure that the sleep time is almost the sleep we asked for
-        self.assertLessEqual(current, start + .210)
-        self.assertGreaterEqual(current, start + .200)
+        wait_time = current - start
+        self.assertLessEqual(wait_time, .220)
+        self.assertGreaterEqual(wait_time, .190)
 
     def test_wait_task(self):
 

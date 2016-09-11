@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division
 
+import collections
 import six
 import os
 import sys
@@ -43,6 +44,10 @@ class GelEvent(object):
     Accept = True
     Repeat = True
     Cancel = False
+
+
+class GelExitError(OSError):
+    pass
 
 
 class _GelQueue(Queue.Queue):
@@ -124,6 +129,7 @@ class Gel(object):
     def __init__(self):
         self._handler = self._handler_generator()
         self._mutex = threading.Lock()
+        self._current_thread = threading.current_thread()
         self._socket_queue = socketqueue.SocketQueue()
         self._timers = set()
         self._io_cb = {}
@@ -181,15 +187,110 @@ class Gel(object):
             if fd is not None:
                 del self._io_cb[handler]
                 self._io_handlers[fd].remove(handler)
+                self._socket_queue.unregister(fd)
 
     def idle_call(self, cb, *args, **kwargs):
         self._idle_queue.put((cb, None, args, kwargs))
 
     def deffer_to_thread(self, cb, *args, **kwargs):
+        """
+        deffer execution to thread injecting the reactor in the thread
+        example:
+
+        def response():
+            print("this task is called in main thread.")
+
+        def threaded_task(reactor, *args, **kwargs):
+            print(args, kwargs)
+            reactor.idle_call(response)
+
+        reactor.deffer_to_thread(threaded_task, 1, 2, 3, x=4)
+        """
         # TODO: use a thread pool?
-        thread = threading.Thread(group="deffered", target=cb, name=cb.__name__,
+        args = (self, ) + args
+        thread = threading.Thread(target=cb, name=cb.__name__,
                                   args=args, kwargs=kwargs)
         thread.start()
+
+    def threaded_wrapper(self, cb):
+        """
+        the same as wait_task but as an decorator
+        decorates a task to run in a thread but behaving as a normal task
+
+        it makes the function waits til the thread is ended,
+        but the main_loop will continue to process events in meantime
+
+        >>> @reactor.threaded_wrapper
+        >>> def a_long_wait_task(*args, **kwargs):
+        >>>     ....
+        >>>
+        >>> response = a_long_wait_task(*args, **kwargs)
+
+        """
+
+        @functools.wraps(cb)
+        def decorated(*args, **kwargs):
+            return self.wait_task(cb, *args, **kwargs)
+
+        return decorated
+
+    def selector(self, file_handlers):
+        if not (isinstance, collections.Iterable):
+            raise AttributeError("file handlers should be iterable")
+
+        output = []
+
+        def event_handler(event):
+            output.append(event)
+
+        [self.register_io(file_handler, event_handler) for file_handler in file_handlers]
+
+        while len(output) == 0 and self.main_iteration():
+            pass
+
+        if len(output) == 0: # it means main_quit was called
+            # once we already consumed the exit event, we need to resend it to the main loop
+            self.main_quit()
+            raise GelExitError('main loop exited before io response')
+        return output
+
+    def wait_task(self, cb, *args, **kwargs):
+        """
+        spawns a task to a thread and waits the execution of the mainloop until the response
+        the other events will continue to run in meantime
+        """
+
+        output = []
+
+        def response_callback(status, response):
+            output.append(status)
+            output.append(response)
+
+        @functools.wraps(cb)
+        def callback(reactor, *args, **kwargs):
+            try:
+                ret = cb(*args, **kwargs)
+            except Exception as e:
+                self.idle_call(response_callback, False, e)
+                return
+            self.idle_call(response_callback, True, ret)
+
+        self.deffer_to_thread(callback, *args, **kwargs)
+
+        while len(output) == 0 and self.main_iteration():
+            pass
+
+        if len(output) == 0:
+            # once we already consumed the exit event, we need to resend it to the main loop
+            self.main_quit()
+            raise GelExitError('main loop exited before task response')
+
+        status, response = output
+
+        if status is False:
+            raise response
+        else:
+            return response
 
     def timeout_call(self, timeout, cb, *args, **kwargs):
         return self._timer(timeout / 1000.0, cb, *args, **kwargs)
@@ -197,11 +298,36 @@ class Gel(object):
     def timeout_seconds_call(self, timeout, cb, *args, **kwargs):
         return self._timer(timeout, cb, *args, **kwargs)
 
-    def main_iteration(self, block=True):
+    def sleep(self, miliseconds):
+        """
+        sleeps while the reactor do other events
+        :param timeout:
+        """
+        response = []
+        def callback():
+            response.append(True)
+        self.timeout_call(miliseconds, callback)
+        while not response and self.main_iteration():
+            pass
+        if not response:
+            # once we already consumed the exit event, we need to resend it to the main loop
+            self.main_quit()
+            raise GelExitError('main loop exited before sleep is done')
+
+    def sleep_seconds(self, seconds):
+        return self.sleep(seconds * 1000)
+
+    def main_iteration(self, block=True, timeout=None):
+        if threading.current_thread() is not self._current_thread:
+            raise OSError("can't run main iteration inside another thread"
+                          " than the thread that created the reactor.")
         try:
-            event = self._socket_queue.poll(timeout=-1 if block else 0)[0][0]
+            if timeout is None:
+                event = self._socket_queue.poll(timeout=-1 if block else 0)[0][0]
+            else:
+                event = self._socket_queue.poll(timeout=timeout)
         except IndexError:
-            # this exception will be caugth when using block=False
+            # this exception will be caugth whenever using block=False or timeout
             return True
 
         if event is self._quit_queue.pipe:
@@ -222,7 +348,8 @@ class Gel(object):
         self._cancel_all_timers()
 
     def main_quit(self):
-        self._quit_queue.put(None)
+        self._quit_queue.put(True)
+        pass
 
     def _handle_io_event(self, event):
         cbs = []
@@ -241,7 +368,7 @@ class Gel(object):
                 logger.exception("%s", e)
                 logger.exception("%s", traceback.format_exc())
 
-        map(self.unregister, handlers_to_remove)
+        [self.unregister(i) for i in handlers_to_remove]
 
     def _handler_queue_event(self):
         # runs the idle callback on the queue or timer callback

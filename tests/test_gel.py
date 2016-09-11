@@ -2,6 +2,7 @@
 
 from gel import gel
 
+import socket
 import six
 import sys
 import unittest
@@ -32,7 +33,7 @@ def gel_main(reactor):
                 raise TimeoutError("callback took to long to execute")
 
             reactor.timeout_seconds_call(2, timeout_error)
-            r = f(*args, **kwargs)
+            reactor.idle_call(f, *args, **kwargs)
             reactor.main()
         return decorated
     return decorator
@@ -93,7 +94,6 @@ class GelTestCase(unittest.TestCase):
 
         call_later()
 
-
     def test_socket_accept(self):
 
         @gel_main(self.reactor)
@@ -109,7 +109,6 @@ class GelTestCase(unittest.TestCase):
                 s.listen(1)
                 break
 
-
             @gel_quit(self.reactor)
             def callback(event):
                 socket, addr = event.accept()
@@ -121,6 +120,57 @@ class GelTestCase(unittest.TestCase):
 
         actual_test()
 
-
     def test_main_iteration_with_block_false_should_return_True_with_no_events(self):
         self.assertTrue(self.reactor.main_iteration(block=False))
+
+    def test_sleep(self):
+        start = time.time()
+        self.reactor.sleep(200)
+        current = time.time()
+        # assure that the sleep time is almost the sleep we asked for
+        self.assertLessEqual(current, start + .210)
+        self.assertGreaterEqual(current, start + .200)
+
+    def test_wait_task(self):
+
+        def threaded_task(a, b):
+            return a * b
+
+        ret = self.reactor.wait_task(threaded_task, 3, 4)
+        self.assertEqual(ret, 3 * 4)
+
+    def test_wait_task_throwns_an_exception_inside_thread_should_raises_that_exception_in_the_current_execution_flow(self):
+        def threaded_task():
+            return 0/0
+        self.assertRaises(ZeroDivisionError, self.reactor.wait_task, threaded_task)
+
+    def test_threaded_wrapper(self):
+
+        @self.reactor.threaded_wrapper
+        def threaded_task():
+            time.sleep(0.1)
+            return 10
+
+        self.assertEqual(10, threaded_task())
+
+    def test_selector(self):
+
+        @gel_main(self.reactor)
+        def actual_test():
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+            s.sendto(b"", ("", 1))
+            _, port = s.getsockname()
+
+            def timeout():
+                s.sendto(b"\x00", s.getsockname())
+
+            self.reactor.timeout_seconds_call(0.1, timeout)
+            response = self.reactor.selector([s])
+
+            self.assertEqual([s], response)
+            self.assertEqual(s.recvfrom(1), (b'\x00', ('127.0.0.1', s.getsockname()[1])))
+            self.reactor.main_quit()
+
+        actual_test()

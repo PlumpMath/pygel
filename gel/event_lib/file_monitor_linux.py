@@ -136,7 +136,8 @@ class FileError(Exception):
 class FileWatchError(Exception):
     pass
 
-from gel import Gel, IO_IN, IO_OUT
+from gel import Gel
+from gel.constants import IO_IN, IO_OUT
 import types
 
 class FileWatch(object):

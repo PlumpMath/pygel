@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from gel import gel
+from gel import Gel, GelFactoryError
 
 import socket
 import six
@@ -9,6 +9,9 @@ import unittest
 import time
 import functools
 
+
+# we're not making any tests on qt4 because using pyqt4 and pyqt5 in the same process will lead to failiures
+# but the low level api for the reactor not changed at all in qt4 and qt5, so we expect qt4 should work as well qt5
 
 
 class TimeoutError(AssertionError):
@@ -58,7 +61,7 @@ def gel_quit(reactor):
 class GelTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.reactor = gel.Gel()
+        self.reactor = Gel()
 
     def test_timeout_call(self):
         A = 1
@@ -180,3 +183,31 @@ class GelTestCase(unittest.TestCase):
             self.reactor.main_quit()
 
         actual_test()
+
+
+class TestGelFactory(unittest.TestCase):
+
+    def test_non_available_reactor_should_fail(self):
+        self.assertRaises(GelFactoryError, Gel.from_reactor, ('cocoa'))
+
+    def test_factory_with_no_arguments_should_use_gel_reactor(self):
+        from gel.reactor.gel_reactor import GelReactor
+        gel = Gel.from_reactor()
+        self.assertIsInstance(gel._reactor, GelReactor)
+
+    def test_factory_use_qt5_reactor(self):
+        from gel.reactor.qt5_reactor import Qt5Reactor
+        from PyQt5.QtCore import QCoreApplication
+
+        # we need an qt application in orther to use a qt reactor
+        app = QCoreApplication(sys.argv)
+
+        gel = Gel.from_reactor(event_loop='qt5')
+        self.assertIsInstance(gel._reactor, Qt5Reactor)
+
+        gel = Gel.from_reactor(event_loop='pyqt5')
+        self.assertIsInstance(gel._reactor, Qt5Reactor)
+
+        gel = Gel.from_reactor(event_loop='qt')
+        self.assertIsInstance(gel._reactor, Qt5Reactor)
+

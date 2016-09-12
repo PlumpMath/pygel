@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod, abstractclassmethod
+from abc import ABCMeta, abstractmethod
 import six
 
 import logging
@@ -59,7 +59,7 @@ class BaseReactor(BaseReactorNoMeta):
     def main_quit(self):
         pass
 
-    @abstractclassmethod
+    @abstractmethod
     def _cancel_all_timers(self):
         pass
 

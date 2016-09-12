@@ -1,90 +1,56 @@
 pygel
 =====
 
-An implementation of some functionalities of gobject/glib/gio in pure python, but adding a lot of new features.
+*pygel* is a pure-python event loop library that works on *Python 2.7+*, *Python 3.4+* and PyPy as well
 
-how to use:
+*pygel* implements its own event loop library from scratch using [socketqueue](http://github.com/caetanus/socketqueue/)
 
-an example using pygobject,
-note the same code is valid using gel,
-the only change is:
-import gel in the place gobject
-import main from gel.
+it was initially based on pygtk2/gobject interfaces but has gained its own life and its own interfaces and the pygtk2/gobject is no longer supported anymore
+
+it can interface with another event libraries as Qt4, Qt5, Gi(work in progress), pygtk2(work in progress)
+
+in some level it mimicks single flow application in some methods as: *sleep*, *selector* and *@threaded_wrapper*
+
+A more deatailed documentation is in progress.
 
 
-   """
-   example using gobject
-   """
-   
-   import socket
-   import gobject
-   from gtk import main
-   import time
-   my_socket = socket.socket()
-   
-   def on_socket_read(self, sock):
-   	print "data received", sock.recv(1024)
-   
-   def idle_generator():
-   	v = ['|','/','-','\']
-   	n = 0
-   	while True:
-   		n = (n+1) % len(v)
-   		yield v[i]
-   
-   idle_caret = idle_generator()
-   
-   def im_idle():
-   	print '\r%s' % idle_caret.next()
-   	return True
-   
-   def called_after_10_seconds():
-   	print '\r', time.asctime()
-   
-   gobject.io_add_watch(my_socket, gobject.IO_IN, on_socket_read)
-   gobject.idle_add(im_idle)
-   gobject.timeout_add(10000, called_after_10_seconds)
-   my_socket.connect(("someaddress",SOMEPORT))
-   main()
-   
-   """
-   with gel, the only diference is that the main function is in gel.
-   """
+Usage Example
+---------------------
 
-example using file monitor:
 
-   """
-   example using file monitor
-   """
-   import gel
-   from gel.event_lib.file_monitor import FileWatch
-   
-   file_watcher = FileWatch(gel)
-   
-   def file_altered(the_path):
-       print "the file %s was altered" % the_path
-   
-   def directory_altered(the_path):
-   	print "the directory was altered" % the_path
-   
-   file_watcher.watch_file('my_file.txt', file_altered)
-   file_watcher.watch_file('my_directory', directory_altered)
-   
-   gel.main()
-   
-other functionalities of gel is almost the same of gobject,
-http://www.pygtk.org/pygtk2reference/gobject-functions.html
+```python
 
-currently the functions supported are:
+"""
+example using pygel
+"""
 
-* idle_add(callback, ...)
-* io_add_watch(fd, condition, callback, ...)
-* source_remove(tag)
-* timeout_add(interval_miliseconds, callback, ...)
-* timeout_add_seconds(interval_seconds, callback, ...)
-* main_quit() <- this function actually belongs to gtk in gobject schema, but in gel belongs
-  to gel.
-* main()
-* get_current_time()
+import socket
+from gel import Gel
 
-the signal functions will be implemented as soon as possible
+reactor = Gel()
+socket_server = socket.socket()
+socket_server.bind(("", 12345))
+socket_server.listen()
+my_socket = socket.socket()
+my_socket.connect(socket_server.getsockname())
+connection, _ = socket_server.accept()
+
+def application():
+	connection.send(b"some data")
+	reactor.sleep(2000)
+	print("sleeping doesn't stop the main_loop")
+
+def on_socket_read(sock):
+	print("data received", sock.recv(1024))
+
+def timeout():
+	print("i'm called after the timeout.")
+	reactor.main_quit()
+
+reactor.register_io(my_socket)
+reactor.idle_call(application)
+reactor.timeout_call_seconds(3.0, timeout)
+reactor.main()
+```
+
+

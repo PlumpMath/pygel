@@ -1,6 +1,8 @@
 six
 socketqueue
-ipython==1.2.1
+ipython
 ipdb
 nose
 rednose
+vext.pyqt5
+vext.pyqt4

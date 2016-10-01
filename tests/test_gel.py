@@ -27,7 +27,7 @@ def port_generator_helper():
             i = 1024
 
 
-GEL_TIMEOUT = 2.0 # Seconds
+GEL_TIMEOUT = 2000.0 # Seconds
 
 
 def gel_main(reactor):
@@ -35,7 +35,9 @@ def gel_main(reactor):
         @functools.wraps(f)
         def decorated(*args, **kwargs):
 
+            st = time.time()
             def timeout_error():
+                print(time.time() - st)
                 reactor.main_quit()
                 raise TimeoutError("callback took to long to execute")
 
@@ -178,11 +180,52 @@ class GelTestCase(unittest.TestCase):
             self.reactor.timeout_seconds_call(0.1, timeout)
             response = self.reactor.selector([s])
 
-            self.assertEqual([s], response)
+            self.assertEqual(s, response)
             self.assertEqual(s.recvfrom(1), (b'\x00', ('127.0.0.1', s.getsockname()[1])))
             self.reactor.main_quit()
 
         actual_test()
+
+    def test_selector_with_timeout_timed_out(self):
+        @gel_main(self.reactor)
+        def actual_test():
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.sendto(b"", ("", 1))
+            _, port = s.getsockname()
+
+            def timeout():
+                s.sendto(b"\x00", s.getsockname())
+
+            self.reactor.timeout_seconds_call(0.3, timeout)
+            response = self.reactor.selector([s], 0.1)
+
+            self.assertIsNone(response)
+            self.reactor.main_quit()
+
+        actual_test()
+
+    def test_selector_with_timeout(self):
+        @gel_main(self.reactor)
+        def actual_test():
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+            s.sendto(b"", ("", 1))
+            _, port = s.getsockname()
+
+            def timeout():
+                s.sendto(b"\x00", s.getsockname())
+
+            self.reactor.timeout_seconds_call(0.01, timeout)
+            response = self.reactor.selector([s], 0.2)
+
+            self.assertEqual(s, response)
+            self.assertEqual(s.recvfrom(1), (b'\x00', ('127.0.0.1', s.getsockname()[1])))
+            self.reactor.main_quit()
+
+        actual_test()
+
 
 
 class TestGelFactory(unittest.TestCase):

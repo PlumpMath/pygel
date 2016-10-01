@@ -184,15 +184,15 @@ class GelReactor(BaseReactor):
     def timeout_call(self, timeout, cb, *args, **kwargs):
         return self._timer(timeout / 1000.0, cb, *args, **kwargs)
 
-    def main_iteration(self, block=True, timeout=None):
+    def main_iteration(self, block=True, timeout_seconds=None):
         if threading.current_thread() is not self._current_thread:
             raise OSError("can't run main iteration inside another thread"
                           " than the thread that created the reactor.")
         try:
-            if timeout is None:
+            if timeout_seconds is None:
                 event = self._socket_queue.poll(timeout=-1 if block else 0)[0][0]
             else:
-                event = self._socket_queue.poll(timeout=timeout)
+                event = self._socket_queue.poll(timeout=timeout_seconds)
         except IndexError:
             # this exception will be caugth whenever using block=False or timeout
             return True

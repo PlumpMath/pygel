@@ -169,10 +169,11 @@ class Qt5Reactor(QObject, BaseReactorNoMeta):
 
     def unregister_io(self, handler):
         with self._mutex:
-            notifier, _ = self._io_handlers[handler]
-            notifier.setEnabled(False)
-            notifier.deleteLater()
-            del self._io_handlers[handler]
+            if handler in self._io_handlers:
+                notifier, _ = self._io_handlers[handler]
+                notifier.setEnabled(False)
+                notifier.deleteLater()
+                del self._io_handlers[handler]
 
     def idle_call(self, cb, *args, **kwargs):
         id = str(uuid.uuid4())
@@ -186,7 +187,8 @@ class Qt5Reactor(QObject, BaseReactorNoMeta):
             del self._idle_handlers[id]
         self._safe_callback(cb, *args, **kwargs)
 
-    def main_iteration(self, block=True, timeout_miliseconds=None):
+    def main_iteration(self, block=True, timeout_seconds=None):
+        timeout_miliseconds = int(timeout_seconds * 1000) if timeout_seconds is not None else None
         if block is True or timeout_miliseconds is not None:
             flags = QEventLoop.WaitForMoreEvents
         else:

@@ -12,6 +12,7 @@ import socket
 import threading
 import functools
 import traceback
+import time
 
 from .reactor.gel_reactor import GelReactor
 
@@ -97,25 +98,34 @@ class Gel(object):
 
         return decorated
 
-    def selector(self, file_handlers):
+    def selector(self, file_handlers, timeout_seconds=None):
         if not (isinstance, collections.Iterable):
             raise AttributeError("file handlers should be iterable")
 
         output = []
 
-        def event_handler(event):
+        def event_handler(event=None):
+            if event is None:
+                pass
             output.append(event)
 
-        [self.register_io(file_handler, event_handler) for file_handler in file_handlers]
+        if timeout_seconds is not None:
+            self.timeout_seconds_call(timeout_seconds, event_handler)
+
+        registered = [self.register_io(file_handler, event_handler) for file_handler in file_handlers]
 
         while len(output) == 0 and self.main_iteration():
             pass
 
-        if len(output) == 0: # it means main_quit was called
+        if len(output) == 0: #  it means main_quit was called
             # once we already consumed the exit event, we need to resend it to the main loop
             self.main_quit()
             raise GelExitError('main loop exited before io response')
-        return output
+
+        # unregister io after call
+        [self.unregister(i) for i in registered]
+
+        return output[0]
 
     def wait_task(self, cb, *args, **kwargs):
         """
@@ -180,8 +190,8 @@ class Gel(object):
     def sleep_seconds(self, seconds):
         return self.sleep(seconds * 1000)
 
-    def main_iteration(self, block=True, timeout=None):
-        return self._reactor.main_iteration(block, timeout)
+    def main_iteration(self, block=True, timeout_seconds=None):
+        return self._reactor.main_iteration(block, timeout_seconds)
 
     def main(self):
         self._reactor.main()

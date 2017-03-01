@@ -85,6 +85,9 @@ class Qt5Reactor(QObject, BaseReactorNoMeta):
         if instance is None:
             # gets the global instance
             instance = QCoreApplication.instance()
+            if instance is None:
+                raise Qt5ReactorError("You should instantiate an qt5 application"
+                                      "before you instantiate gel")
 
         elif not isinstance(instance, QCoreApplication):
             raise Qt5ReactorError("instance should be None or an valid QApplication")
@@ -131,9 +134,10 @@ class Qt5Reactor(QObject, BaseReactorNoMeta):
             with self._mutex:
                 if timer in self._timers:
                     del self._timers[timer]
-                else: return
+                else:
+                    return
             if self._safe_callback(cb, *args, **kwargs):
-                self._timer(timeout, cb, *args, **kwargs)
+                self._timer(seconds, cb, *args, **kwargs)
 
         with self._mutex:
             # we need to store the callback to avoid python to collect the no
